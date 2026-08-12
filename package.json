@@ -1,0 +1,17 @@
+{
+  "name": "reflection",
+  "private": true,
+  "version": "1.0.0",
+  "description": "REFLECTION - a two-world rage/puzzle platformer for web game jam",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -p tsconfig.json && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.4",
+    "vite": "^5.4.8"
+  }
+}

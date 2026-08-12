@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#0b0e1c" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Reflection" />
+  <meta name="screen-orientation" content="landscape" />
+  <title>REFLECTION</title>
+  <script type="module" crossorigin src="./assets/index-9dsL7wMa.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/index-DprV9Vur.css">
+</head>
+<body>
+  <div id="app">
+    <div id="game-wrap">
+      <canvas id="game"></canvas>
+      <div id="scanlines"></div>
+      <div id="vignette"></div>
+      <div id="hud">
+        <div id="float-hit" title="Tap to swap worlds"></div>
+        <div id="float-tag"></div>
+        <div id="lives"></div>
+        <div id="timer">0.00</div>
+        <div id="menu-btn">&#9776;</div>
+      </div>
+      <div id="banner"></div>
+      <div id="mobile-controls">
+        <div class="ctrl-group ctrl-left">
+          <button class="ctrl-btn" id="btn-left" aria-label="Move left">&#9664;</button>
+          <button class="ctrl-btn" id="btn-right" aria-label="Move right">&#9654;</button>
+        </div>
+        <div class="ctrl-group ctrl-right">
+          <button class="ctrl-btn" id="btn-crouch" aria-label="Crouch">&#9660;</button>
+          <button class="ctrl-btn ctrl-jump" id="btn-jump" aria-label="Jump">&#9650;</button>
+        </div>
+      </div>
+      <div id="screens"></div>
+      <div id="rotate-msg">
+        <div class="rotate-icon" aria-hidden="true">&#8635;</div>
+        <div class="rotate-title">ROTATE YOUR DEVICE</div>
+        <div class="rotate-sub">Reflection is best played in landscape</div>
+      </div>
+      <div id="confirm-overlay">
+        <div class="confirm-box">
+          <div class="confirm-title">ABORT LEVEL?</div>
+          <div class="confirm-text">Your progress in this level will be lost.</div>
+          <div class="confirm-btns">
+            <button class="btn btn-primary" id="confirm-yes">ABORT</button>
+            <button class="btn" id="confirm-no">KEEP PLAYING</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
