@@ -41,6 +41,11 @@ body {
   height: 100%;
 }
 
+#app[hidden],
+#landing-root[hidden] {
+  display: none !important;
+}
+
 #game-wrap:fullscreen,
 #game-wrap:-webkit-full-screen {
   width: 100vw;
