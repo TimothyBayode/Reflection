@@ -24,6 +24,8 @@ export interface WorldEvents {
   onCrusherSlam?: () => void;
   onPlatformBreak?: () => void;
   onPlatformRumble?: () => void;
+  onBoost?: (axis: "horizontal" | "vertical") => void;
+  onPowerup?: () => void;
 }
 
 export interface WorldSnapshot {
@@ -36,8 +38,16 @@ export interface WorldSnapshot {
     vy: number;
     crouching: boolean;
     face: number;
+    grounded: boolean;
+    coyote: number;
+    jumpBuffer: number;
+    jumpCutUsed: boolean;
+    boostT: number;
+    boostCooldown: number;
   };
   hazards: ReturnType<Hazard["snap"]>[];
+  superJumpReady: boolean;
+  collectedBoosterZones: number[];
 }
 
 const GAP_EPS = 0.6;
@@ -52,6 +62,11 @@ export class World {
   portals: Rect[] = [];
   player!: Player;
   wind = { x: 0, y: 0 };
+  windZones: { x: number; y: number; w: number; h: number; forceX: number; forceY: number }[] = [];
+  boosterZones: { x: number; y: number; kind: "boosterJump" | "horizontalBoost" }[] = [];
+  superJumpReady = false;
+  collectedBoosterZones = new Set<number>();
+  timeScale = 1;
   time = 0;
   reversalMul = 1;
   levelW = 0;
@@ -93,7 +108,38 @@ export class World {
     this.reversalMul = rev > 0 && Math.floor(this.time / rev) % 2 === 1 ? -1 : 1;
 
     for (const h of this.hazards) h.update(this, dt);
+    this.collectPowerups();
     this.player.update(dt, input, this);
+  }
+
+  consumeSuperJump(): boolean {
+    if (!this.levelRules.boosterJump || !this.superJumpReady) return false;
+    this.superJumpReady = false;
+    return true;
+  }
+
+  private collectPowerups(): void {
+    const player = this.player.rect();
+    this.boosterZones.forEach((zone, index) => {
+      if (zone.kind !== "boosterJump" || this.collectedBoosterZones.has(index)) return;
+      if (player.x < zone.x + TILE && player.x + player.w > zone.x && player.y < zone.y + TILE && player.y + player.h > zone.y) {
+        this.collectedBoosterZones.add(index);
+        this.superJumpReady = true;
+        this.events.onPowerup?.();
+      }
+    });
+  }
+
+  windAt(rect: Rect): { x: number; y: number } {
+    let x = this.wind.x;
+    let y = this.wind.y;
+    for (const zone of this.windZones) {
+      if (rect.x < zone.x + zone.w && rect.x + rect.w > zone.x && rect.y < zone.y + zone.h && rect.y + rect.h > zone.y) {
+        x += zone.forceX;
+        y += zone.forceY;
+      }
+    }
+    return { x, y };
   }
 
   movePlayer(p: Player, dt: number): void {
@@ -280,8 +326,16 @@ export class World {
         vy: this.player.vy,
         crouching: this.player.crouching,
         face: this.player.face,
+        grounded: this.player.grounded,
+        coyote: this.player.coyote,
+        jumpBuffer: this.player.jumpBuffer,
+        jumpCutUsed: this.player.jumpCutUsed,
+        boostT: this.player.boostT,
+        boostCooldown: this.player.boostCooldown,
       },
       hazards: this.hazards.map((h) => h.snap()),
+      superJumpReady: this.superJumpReady,
+      collectedBoosterZones: [...this.collectedBoosterZones],
     };
   }
 
@@ -296,9 +350,16 @@ export class World {
     p.crouching = s.player.crouching;
     p.h = p.crouching ? 24 : 44;
     p.face = s.player.face;
+    p.grounded = s.player.grounded;
+    p.coyote = s.player.coyote;
+    p.jumpBuffer = s.player.jumpBuffer;
+    p.jumpCutUsed = s.player.jumpCutUsed;
+    p.boostT = s.player.boostT;
+    p.boostCooldown = s.player.boostCooldown;
     p.state = "alive";
-    p.grounded = false;
     p.standingOn = null;
     this.hazards.forEach((h, i) => h.load(s.hazards[i] ?? { t: 0 }));
+    this.superJumpReady = s.superJumpReady;
+    this.collectedBoosterZones = new Set(s.collectedBoosterZones);
   }
 }

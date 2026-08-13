@@ -32,6 +32,9 @@ export class UI {
     if (matchMedia("(pointer: coarse)").matches || navigator.maxTouchPoints > 0) {
       document.body.classList.add("touch");
     }
+    for (const event of ["contextmenu", "selectstart", "dragstart"] as const) {
+      document.querySelector("#game-wrap")?.addEventListener(event, (e) => e.preventDefault());
+    }
   }
 
   showMain(cb: MainCallbacks): void {
@@ -113,7 +116,7 @@ export class UI {
 
   showEnd(totalDeaths: number, menu: () => void, replay: () => void): void {
     this.setGameplayVisible(false);
-    this.screens.innerHTML = `<section class="screen"><div class="panel"><div class="panel-title">REFLECTION<small>MVP COMPLETE</small></div><div class="stats-grid"><div class="stat"><div class="num">30</div><div class="lbl">Levels</div></div><div class="stat"><div class="num">5</div><div class="lbl">Worlds</div></div><div class="stat"><div class="num">${totalDeaths}</div><div class="lbl">Deaths</div></div></div><div class="menu-btns"><button class="btn btn-primary" data-id="replay">PLAY AGAIN</button><button class="btn" data-id="menu">MAIN MENU</button></div></div></section>`;
+    this.screens.innerHTML = `<section class="screen"><div class="panel"><div class="panel-title">REFLECTION<small>GAME COMPLETE</small></div><div class="stats-grid"><div class="stat"><div class="num">30</div><div class="lbl">Levels</div></div><div class="stat"><div class="num">5</div><div class="lbl">Worlds</div></div><div class="stat"><div class="num">${totalDeaths}</div><div class="lbl">Deaths</div></div></div><div class="menu-btns"><button class="btn btn-primary" data-id="replay">PLAY AGAIN</button><button class="btn" data-id="menu">MAIN MENU</button></div></div></section>`;
     this.click("replay", replay); this.click("menu", menu);
   }
 
@@ -181,5 +184,6 @@ export class UI {
     btn.addEventListener("pointerdown", (e) => { e.preventDefault(); btn.setPointerCapture(e.pointerId); set(true); });
     btn.addEventListener("pointerup", () => set(false));
     btn.addEventListener("pointercancel", () => set(false));
+    btn.addEventListener("contextmenu", (e) => e.preventDefault());
   }
 }

@@ -10,8 +10,10 @@ import { UI } from "../ui/UI";
 import type { World, WorldSnapshot } from "../world/World";
 import type { WorldRole } from "../world/Rules";
 import { constructWorld, type CheckpointZone } from "../level/LevelLoader";
-import { finalRules, finalWind } from "../level/LevelData";
 import { getLevel, worldName } from "../level/data";
+import { LEVELS } from "../level/data";
+import { validateLevels } from "../level/LevelValidator";
+import { DebugOverlay } from "./DebugOverlay";
 import { DEATH_TIME } from "../player/Player";
 import { ImmersiveManager } from "./Immersive";
 
@@ -31,12 +33,13 @@ export class Game {
   private renderer: Renderer;
   private ui: UI;
   private immersive: ImmersiveManager;
+  private debug = new DebugOverlay();
 
   private phase: Phase = "menu";
   private settingsReturn: "menu" | "pause" = "menu";
   private reality: World | null = null;
   private reflection: World | null = null;
-  private checkpointZones: CheckpointZone[] = [];
+  private checkpointZones: Record<WorldRole, CheckpointZone[]> = { reality: [], reflection: [] };
   private active: WorldRole = "reality";
   private levelId = 1;
   private lives = 3;
@@ -57,6 +60,10 @@ export class Game {
   }
 
   start(): void {
+    if (import.meta.env.DEV) {
+      const issues = validateLevels(LEVELS);
+      if (issues.length) throw new Error(`Invalid level data:\n${issues.map((issue) => `L${issue.level} ${issue.world ?? ""}: ${issue.message}`).join("\n")}`);
+    }
     this.settings.load();
     this.save.load();
     this.ui.applySettings(this.settings.get());
@@ -117,6 +124,7 @@ export class Game {
     this.lives = 3;
     this.elapsedMs = 0;
     this.active = "reality";
+    this.input.reset();
     this.buildLevel();
     this.phase = "playing";
     this.input.setControlsPaused(false);
@@ -127,13 +135,11 @@ export class Game {
 
   private buildLevel(): void {
     const def = getLevel(this.levelId);
-    const rules = finalRules(def);
-    const wind = finalWind(def);
-    const reality = constructWorld(def.map, def.tweaks ?? {}, def.id, rules, "reality", wind);
-    const reflection = constructWorld(def.map, def.tweaks ?? {}, def.id, rules, "reflection", wind);
+    const reality = constructWorld(def, "reality");
+    const reflection = constructWorld(def, "reflection");
     this.reality = reality.world;
     this.reflection = reflection.world;
-    this.checkpointZones = reality.checkpointZones;
+    this.checkpointZones = { reality: reality.checkpointZones, reflection: reflection.checkpointZones };
     this.audio.bladeWhir(this.reality.bladeCircles().length > 0, 1, 0.022);
     this.bindWorldAudio(this.reality);
     this.bindWorldAudio(this.reflection);
@@ -144,6 +150,7 @@ export class Game {
     this.portalCooldown = 0;
     this.shake = 0;
     this.swapElapsed = 1;
+    this.renderer.resetCameras(this.reality, this.reflection);
   }
 
   private bindWorldAudio(world: World): void {
@@ -158,6 +165,15 @@ export class Game {
       this.settings.haptic(35);
     };
     world.events.onPlatformBreak = () => this.audio.platformBreak();
+    world.events.onBoost = () => {
+      this.audio.boost();
+      this.settings.haptic(24);
+      this.shakeImpact(3);
+    };
+    world.events.onPowerup = () => {
+      this.audio.powerup();
+      this.settings.haptic([18, 20, 30]);
+    };
   }
 
   private update(dt: number): void {
@@ -172,15 +188,16 @@ export class Game {
 
     if (this.phase === "playing") {
       this.elapsedMs += dt * 1000;
-      this.reality.update(dt, this.input);
-      this.reflection.update(dt * this.reflection.levelRules.timeScale, this.input);
+      this.reality.update(dt * this.reality.timeScale, this.input);
+      this.reflection.update(dt * this.reflection.timeScale, this.input);
       this.renderer.updateCameras(this.renderState(), dt);
       this.checkGameplayEvents();
       this.refreshHUD();
+      this.debug.update(this.levelId, this.active, this.reality, this.reflection, this.lives, this.elapsedMs);
     } else if (this.phase === "dying") {
       this.deathElapsed += dt;
-      this.reality.update(dt, this.input);
-      this.reflection.update(dt * this.reflection.levelRules.timeScale, this.input);
+      this.reality.update(dt * this.reality.timeScale, this.input);
+      this.reflection.update(dt * this.reflection.timeScale, this.input);
       this.renderer.updateCameras(this.renderState(), dt);
       if (this.deathElapsed >= DEATH_TIME) this.finishDeath();
     } else if (this.phase === "completing") {
@@ -220,7 +237,7 @@ export class Game {
         this.portalCooldown = 0.75;
         this.swapWorlds();
       }
-      for (const zone of this.checkpointZones) {
+      for (const zone of this.checkpointZones[world.role]) {
         if (zone.index > world.checkpointIndex && rectsOverlap(p.rect(), zone)) {
           this.activateCheckpoint(zone);
           break;
@@ -230,9 +247,8 @@ export class Game {
   }
 
   private activateCheckpoint(zone: CheckpointZone): void {
-    const feetY = zone.y + zone.h;
-    this.reality!.setCheckpoint(this.reality!.player.x, feetY - this.reality!.player.h, zone.index);
-    this.reflection!.setCheckpoint(this.reflection!.player.x, feetY - this.reflection!.player.h, zone.index);
+    this.reality!.setCheckpoint(this.reality!.player.x, this.reality!.player.y, zone.index);
+    this.reflection!.setCheckpoint(this.reflection!.player.x, this.reflection!.player.y, zone.index);
     this.checkpointSnapshot = this.snapBoth();
     this.audio.checkpoint();
     this.settings.haptic(20);
@@ -255,6 +271,8 @@ export class Game {
     if (this.lives <= 0) {
       this.lives = 3;
       this.elapsedMs = 0;
+      this.active = "reality";
+      this.input.reset();
       this.buildLevel();
     } else if (this.checkpointSnapshot) {
       this.reality!.restore(this.checkpointSnapshot.reality);
@@ -321,6 +339,8 @@ export class Game {
     if (!this.reality) return;
     this.lives = 3;
     this.elapsedMs = 0;
+    this.active = "reality";
+    this.input.reset();
     this.buildLevel();
     this.phase = "playing";
     this.input.setControlsPaused(false);

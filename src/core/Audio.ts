@@ -201,6 +201,20 @@ export class AudioManager {
     this.sfx(true, 0.1, () => this.beep("triangle", 320, 620, 0.1, 0.12));
   }
 
+  boost(): void {
+    this.sfx(true, 0.2, () => {
+      this.beep("sawtooth", 260, 980, 0.16, 0.1);
+      this.noise(0.12, 0.05, 1800, "highpass");
+    });
+  }
+
+  powerup(): void {
+    this.sfx(true, 0.35, () => {
+      this.beep("sine", 520, 1040, 0.18, 0.1);
+      this.beep("triangle", 780, 1560, 0.2, 0.08, 0.1);
+    });
+  }
+
   land(): void {
     this.sfx(true, 0.1, () => {
       this.beep("sine", 130, 55, 0.09, 0.16);

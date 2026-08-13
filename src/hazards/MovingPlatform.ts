@@ -1,81 +1,57 @@
 import { Hazard, type HazardSnap } from "./Hazard";
 import type { World } from "../world/World";
 import type { Rect } from "../core/types";
-import { TILE } from "../core/types";
 
 export interface MoveCfg {
-  axis: "x" | "y";
-  range: number;
+  toX: number;
+  toY: number;
+  w: number;
+  h: number;
   speed: number;
   phase: number;
 }
 
-/** Solid platform gliding along a line segment; carries the player. */
 export class MovingPlatform extends Hazard {
-  cfg: MoveCfg;
-  baseX: number;
-  baseY: number;
+  private readonly baseX: number;
+  private readonly baseY: number;
 
-  constructor(x: number, y: number, cfg: MoveCfg) {
+  constructor(x: number, y: number, readonly cfg: MoveCfg) {
     super(x, y);
-    this.cfg = cfg;
     this.baseX = x;
     this.baseY = y;
   }
 
-  private ease(t: number): number {
-    return t * t * (3 - 2 * t);
-  }
-
-  private offset(world: World): number {
-    const { range, speed, phase } = this.cfg;
-    const period = (2 * range) / Math.max(1, speed);
-    let u = ((world.time + phase) / period) % 1;
+  update(world: World): void {
+    const previousX = this.x;
+    const previousY = this.y;
+    const distance = Math.hypot(this.cfg.toX - this.baseX, this.cfg.toY - this.baseY);
+    const period = (2 * distance) / Math.max(1, this.cfg.speed);
+    let u = period > 0 ? ((world.time + this.cfg.phase) / period) % 1 : 0;
     if (u < 0) u += 1;
-    u = world.reversalMul < 0 ? 1 - u : u;
-    const tri = u < 0.5 ? this.ease(u * 2) : 1 - this.ease((u - 0.5) * 2);
-    return tri * range;
-  }
-
-  update(world: World, dt: number): void {
-    const px = this.x;
-    const py = this.y;
-    const off = this.offset(world);
-    this.x = this.baseX + (this.cfg.axis === "x" ? off : 0);
-    this.y = this.baseY + (this.cfg.axis === "y" ? off : 0);
-    this.carryDX = this.x - px;
-    this.carryDY = this.y - py;
-    void dt;
+    const triangle = u < 0.5 ? u * 2 : 2 - u * 2;
+    const eased = triangle * triangle * (3 - 2 * triangle);
+    this.x = this.baseX + (this.cfg.toX - this.baseX) * eased;
+    this.y = this.baseY + (this.cfg.toY - this.baseY) * eased;
+    this.carryDX = this.x - previousX;
+    this.carryDY = this.y - previousY;
   }
 
   draw(ctx: CanvasRenderingContext2D, style: { platform: string; platformEdge: string; platformTop: string }): void {
-    const w = TILE * 2;
-    const h = 16;
     ctx.fillStyle = style.platformEdge;
-    ctx.fillRect(this.x, this.y, w, h);
+    ctx.fillRect(this.x, this.y, this.cfg.w, this.cfg.h);
     ctx.fillStyle = style.platform;
-    ctx.fillRect(this.x + 2, this.y, w - 4, h - 2);
+    ctx.fillRect(this.x + 2, this.y + 2, this.cfg.w - 4, Math.max(1, this.cfg.h - 4));
     ctx.fillStyle = style.platformTop;
-    ctx.fillRect(this.x + 2, this.y, w - 4, 4);
-    /* glider nubs */
-    ctx.fillStyle = style.platformEdge;
-    ctx.fillRect(this.x + 6, this.y + h - 3, 6, 3);
-    ctx.fillRect(this.x + w - 12, this.y + h - 3, 6, 3);
+    ctx.fillRect(this.x + 2, this.y + 2, this.cfg.w - 4, Math.min(4, this.cfg.h));
   }
 
-  solidRect(): Rect {
-    return { x: this.x, y: this.y, w: TILE * 2, h: 16 };
-  }
-
-  deadlyRect(): Rect | null {
-    return null;
-  }
-
-  snap(): HazardSnap {
-    return { t: 0 };
-  }
-
-  load(): void {
-    /* t-driven */
+  solidRect(): Rect { return { x: this.x, y: this.y, w: this.cfg.w, h: this.cfg.h }; }
+  deadlyRect(): Rect | null { return null; }
+  snap(): HazardSnap { return { t: 0, x: this.x, y: this.y, carryDX: this.carryDX, carryDY: this.carryDY }; }
+  load(s: HazardSnap): void {
+    this.x = s.x as number;
+    this.y = s.y as number;
+    this.carryDX = s.carryDX as number;
+    this.carryDY = s.carryDY as number;
   }
 }

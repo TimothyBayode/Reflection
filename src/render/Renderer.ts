@@ -58,6 +58,11 @@ export class Renderer {
     };
   }
 
+  resetCameras(reality: World, reflection: World): void {
+    this.cameras.reality = { x: reality.player.centerX(), y: reality.player.centerY() };
+    this.cameras.reflection = { x: reflection.player.centerX(), y: reflection.player.centerY() };
+  }
+
   updateCameras(state: RenderState, dt: number): void {
     for (const role of ["reality", "reflection"] as const) {
       const world = state[role];
@@ -107,8 +112,8 @@ export class Renderer {
     const ctx = this.ctx;
     const style = this.styles[world.role];
     const zoom = floating
-      ? Math.min(rect.w / 520, rect.h / 310)
-      : Math.max(rect.h / 576, Math.min(rect.w / 960, 1.45));
+      ? Math.min(rect.w / 630, rect.h / 370)
+      : Math.max(rect.h / 700, Math.min(rect.w / 1180, 1.55));
     const visibleW = rect.w / zoom;
     const visibleH = rect.h / zoom;
     const cam = this.cameras[world.role];
@@ -139,6 +144,7 @@ export class Renderer {
 
     this.drawGrid(ctx, world, cx, cy, visibleW, visibleH);
     for (const solid of world.solids) this.drawSolid(ctx, solid, style);
+    this.drawZones(ctx, world);
     for (const portal of world.portals) this.drawPortal(ctx, portal, world.time, style.accent);
     for (const hazard of world.hazards) hazard.draw(ctx, style, world.time);
     this.drawDoor(ctx, world.doorRect, world.role, doorClose);
@@ -229,6 +235,53 @@ export class Renderer {
     ctx.rotate(-time * 2.7);
     ctx.strokeRect(-portal.w * 0.25, -portal.h * 0.25, portal.w * 0.5, portal.h * 0.5);
     ctx.restore();
+  }
+
+  private drawZones(ctx: CanvasRenderingContext2D, world: World): void {
+    for (const zone of world.windZones) {
+      ctx.fillStyle = world.role === "reality" ? "rgba(80,140,190,.07)" : "rgba(110,110,255,.09)";
+      ctx.fillRect(zone.x, zone.y, zone.w, zone.h);
+      ctx.strokeStyle = world.role === "reality" ? "rgba(60,110,160,.28)" : "rgba(130,150,255,.32)";
+      ctx.lineWidth = 2;
+      const direction = Math.sign(zone.forceX) || 1;
+      for (let y = zone.y + 28; y < zone.y + zone.h; y += 54) {
+        for (let x = zone.x + 20; x < zone.x + zone.w; x += 82) {
+          ctx.beginPath();
+          ctx.moveTo(x, y);
+          ctx.lineTo(x + direction * 26, y);
+          ctx.lineTo(x + direction * 18, y - 6);
+          ctx.moveTo(x + direction * 26, y);
+          ctx.lineTo(x + direction * 18, y + 6);
+          ctx.stroke();
+        }
+      }
+    }
+    for (const zone of world.boosterZones) {
+      const index = world.boosterZones.indexOf(zone);
+      if (zone.kind === "boosterJump" && world.collectedBoosterZones.has(index)) continue;
+      const vertical = zone.kind === "boosterJump";
+      ctx.fillStyle = vertical ? "rgba(86,235,255,.2)" : "rgba(255,180,75,.2)";
+      ctx.strokeStyle = vertical ? "#59e0ff" : "#ffb35c";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(zone.x + TILE / 2, zone.y + TILE / 2, 12, 0, TAU);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = ctx.strokeStyle;
+      ctx.font = "bold 10px sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText(vertical ? "BJ" : "HB", zone.x + TILE / 2, zone.y + TILE / 2 + 4);
+    }
+
+    if (world.superJumpReady) {
+      const x = world.player.centerX();
+      const y = world.player.y - 12;
+      ctx.strokeStyle = "#8ff5ff";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(x, y, 7 + Math.sin(world.time * 7) * 2, 0, TAU);
+      ctx.stroke();
+    }
   }
 
   private drawDarkness(rect: Rect, world: World, cx: number, cy: number, zoom: number): void {

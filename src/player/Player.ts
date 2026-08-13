@@ -5,8 +5,10 @@ import type { Rect } from "../core/types";
 import { TAU } from "../core/types";
 
 export const GRAVITY = 2350;
-export const JUMP_V = 880;
-export const MAX_VX = 330;
+export const JUMP_V = 980;
+export const MAX_VX = 350;
+export const VERTICAL_BOOST_V = 1220;
+export const HORIZONTAL_BOOST_V = 680;
 export const CROUCH_MAX_VX = 115;
 export const ACC_GROUND = 2950;
 export const ACC_AIR = 2000;
@@ -38,6 +40,8 @@ export class Player {
   coyote = 0;
   jumpBuffer = 0;
   jumpCutUsed = false;
+  boostT = 0;
+  boostCooldown = 0;
 
   standingOn: Hazard | null = null;
 
@@ -82,6 +86,8 @@ export class Player {
     const rules = world.rules;
     const gravDir = rules.gravMul;
     const crouchHeld = input.down("crouch");
+    this.boostT = Math.max(0, this.boostT - dt);
+    this.boostCooldown = Math.max(0, this.boostCooldown - dt);
 
     /* --- crouch state (hold-based) --- */
     if (crouchHeld && this.grounded && !this.crouching) {
@@ -118,9 +124,19 @@ export class Player {
       else this.vx -= Math.sign(this.vx) * fric * dt;
     }
 
+    if (world.levelRules.horizontalBoost && this.boostCooldown <= 0 && (input.doublePressEdge("left") || input.doublePressEdge("right"))) {
+      const boostInput = input.doublePressEdge("right") ? 1 : -1;
+      this.vx = boostInput * rules.moveMul * HORIZONTAL_BOOST_V;
+      this.face = Math.sign(this.vx) || this.face;
+      this.boostT = 0.18;
+      this.boostCooldown = 0.38;
+      world.events.onBoost?.("horizontal");
+    }
+
     /* --- wind (already rule-resolved) --- */
-    this.vx += world.wind.x * dt;
-    this.vy += world.wind.y * dt;
+    const wind = world.windAt(this.rect());
+    this.vx += wind.x * dt;
+    this.vy += wind.y * dt;
 
     /* --- coyote / jump buffer --- */
     if (this.grounded) this.coyote = COYOTE;
@@ -131,7 +147,16 @@ export class Player {
 
     if (this.crouching && this.grounded) this.jumpBuffer = 0;
 
-    if (this.jumpBuffer > 0 && (this.grounded || this.coyote > 0)) {
+    if (this.boostCooldown <= 0 && input.doublePressEdge("jump") && world.consumeSuperJump()) {
+      this.vy = -gravDir * VERTICAL_BOOST_V;
+      this.jumpBuffer = 0;
+      this.coyote = 0;
+      this.grounded = false;
+      this.jumpCutUsed = false;
+      this.boostT = 0.18;
+      this.boostCooldown = 0.38;
+      world.events.onBoost?.("vertical");
+    } else if (this.jumpBuffer > 0 && (this.grounded || this.coyote > 0)) {
       this.vy = -gravDir * JUMP_V;
       this.jumpBuffer = 0;
       this.coyote = 0;
@@ -170,6 +195,20 @@ export class Player {
       const bh = this.h * squash;
       const bw = this.w * (this.grounded && this.vx !== 0 ? 1.05 : 1);
       const by = bottom - bh;
+
+      if (this.boostT > 0) {
+        const alpha = this.boostT / 0.18;
+        ctx.strokeStyle = style.glow;
+        ctx.lineWidth = 3;
+        ctx.globalAlpha = alpha * 0.55;
+        ctx.beginPath();
+        ctx.moveTo(cx - this.face * 8, by + bh * 0.3);
+        ctx.lineTo(cx - this.face * 34, by + bh * 0.3);
+        ctx.moveTo(cx - this.face * 8, by + bh * 0.7);
+        ctx.lineTo(cx - this.face * 25, by + bh * 0.7);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+      }
 
       const blink = 0.55 + 0.45 * Math.sin(time * 4);
       ctx.fillStyle = style.body;

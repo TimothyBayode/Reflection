@@ -3,107 +3,50 @@ import type { World } from "../world/World";
 import type { Rect } from "../core/types";
 
 export interface CrusherCfg {
-  axis: "y" | "x";
-  range: number;
-  block: number;
+  toY: number;
+  w: number;
+  h: number;
   period: number;
   phase: number;
-  dir: 1 | -1;
 }
 
-/**
- * Heavy piston that periodically slams along an axis.
- * Component of the piston anchored at the tile cell; it extends `range`
- * pixels from the anchor and kills on contact.
- */
 export class Crusher extends Hazard {
-  cfg: CrusherCfg;
-  baseX: number;
-  baseY: number;
+  private readonly baseY: number;
   private lastSlam = -99;
 
-  constructor(x: number, y: number, cfg: CrusherCfg) {
+  constructor(x: number, y: number, readonly cfg: CrusherCfg) {
     super(x, y);
-    this.cfg = cfg;
-    this.baseX = x;
     this.baseY = y;
   }
 
-  private easeIn(t: number): number {
-    return t * t;
-  }
-
-  private easeOut(t: number): number {
-    return 1 - (1 - t) * (1 - t);
-  }
-
-  private extent(world: World): number {
-    const { period, phase, range } = this.cfg;
-    let u = ((world.time + phase) / period) % 1;
+  update(world: World): void {
+    let u = ((world.time + this.cfg.phase) / this.cfg.period) % 1;
     if (u < 0) u += 1;
-    u = world.reversalMul < 0 ? 1 - u : u;
-    /* slam (0-0.32), hold (0.32-0.62), retract (0.62-1) */
-    if (u < 0.32) return this.easeIn(u / 0.32) * range;
-    if (u < 0.62) return range;
-    return range - this.easeOut((u - 0.62) / 0.38) * range;
-  }
-
-  update(world: World, dt: number): void {
-    const ext = this.extent(world) * world.rules.hazardMul;
-    const { axis, dir } = this.cfg;
-    this.x = this.baseX + (axis === "x" ? ext * dir : 0);
-    this.y = this.baseY + (axis === "y" ? ext * dir : 0);
-
-    const { period, phase } = this.cfg;
-    let u = ((world.time + phase) / period) % 1;
-    if (u < 0) u += 1;
-    u = world.reversalMul < 0 ? 1 - u : u;
+    let extent: number;
+    if (u < 0.32) extent = (u / 0.32) ** 2;
+    else if (u < 0.62) extent = 1;
+    else extent = 1 - (1 - (1 - (u - 0.62) / 0.38)) ** 2;
+    this.y = this.baseY + (this.cfg.toY - this.baseY) * extent;
     if (u >= 0.3 && u < 0.34 && world.time - this.lastSlam > 0.2) {
       this.lastSlam = world.time;
       world.events.onCrusherSlam?.();
     }
-    void dt;
   }
 
   draw(ctx: CanvasRenderingContext2D, style: { hazard: string; hazardEdge: string }): void {
-    const b = this.cfg.block;
     ctx.fillStyle = style.hazard;
     ctx.strokeStyle = style.hazardEdge;
     ctx.lineWidth = 2.5;
     ctx.beginPath();
-    ctx.roundRect(this.x, this.y, b, b, 4);
+    ctx.roundRect(this.x, this.y, this.cfg.w, this.cfg.h, 4);
     ctx.fill();
     ctx.stroke();
-    /* bottom plate marking */
-    ctx.fillStyle = "rgba(0,0,0,0.3)";
-    ctx.fillRect(this.x + 4, this.y + b - 10, b - 8, 6);
-    /* warning stripes */
-    ctx.strokeStyle = style.hazardEdge;
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.moveTo(this.x + b / 2, this.y + b - 6);
-    ctx.lineTo(this.x + b / 2, this.y + b);
-    ctx.stroke();
+    ctx.fillStyle = "rgba(0,0,0,.3)";
+    ctx.fillRect(this.x + 4, this.y + this.cfg.h - 8, this.cfg.w - 8, 5);
   }
 
-  deadlyRect(): Rect {
-    return { ...this.rect() };
-  }
-
-  rect(): Rect {
-    const b = this.cfg.block;
-    return { x: this.x, y: this.y, w: b, h: b };
-  }
-
-  solidRect(): Rect | null {
-    return null;
-  }
-
-  snap(): HazardSnap {
-    return { t: 0 };
-  }
-
-  load(): void {
-    /* t-driven */
-  }
+  deadlyRect(): Rect { return { x: this.x, y: this.y, w: this.cfg.w, h: this.cfg.h }; }
+  solidRect(): Rect | null { return null; }
+  snap(): HazardSnap { return { t: 0, x: this.x, y: this.y, lastSlam: this.lastSlam }; }
+  load(s: HazardSnap): void { this.x = s.x as number; this.y = s.y as number; this.lastSlam = s.lastSlam as number; }
 }

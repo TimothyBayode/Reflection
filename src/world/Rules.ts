@@ -10,6 +10,8 @@ export interface LevelRules {
   timeScale: number;
   reversal: number;
   darkness: boolean;
+  boosterJump: boolean;
+  horizontalBoost: boolean;
 }
 
 export function defaultRules(): LevelRules {
@@ -23,6 +25,8 @@ export function defaultRules(): LevelRules {
     timeScale: 1,
     reversal: 0,
     darkness: false,
+    boosterJump: false,
+    horizontalBoost: false,
   };
 }
 
